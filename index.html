@@ -1046,7 +1046,8 @@
         // Update player
         function updatePlayer() {
             const char = characters[selectedCharacter];
-            const speedBoost = char.speed;
+            const baseSpeed = char.speed;
+            const speedBoost = speedBoostActive ? baseSpeed * 2 : baseSpeed; // 2x speed when boosted!
 
             // JOYSTICK CONTROLS (bottom of screen) - SLOWER
             if (touchActive && (joystickX !== 0 || joystickY !== 0)) {
@@ -1428,6 +1429,78 @@
                 }
             });
 
+            // Draw BLACK HOLES - Dangerous!
+            blackHoles.forEach(hole => {
+                const screenX = (hole.x - cameraX) + canvas.width / 2;
+                const screenY = (hole.y - cameraY) + canvas.height / 2;
+
+                if (screenX > -200 && screenX < canvas.width + 200 &&
+                    screenY > -200 && screenY < canvas.height + 200) {
+
+                    // Event horizon
+                    const gradient = ctx.createRadialGradient(screenX, screenY, 0, screenX, screenY, hole.radius);
+                    gradient.addColorStop(0, '#000000');
+                    gradient.addColorStop(0.7, '#1a0033');
+                    gradient.addColorStop(1, '#ff0044');
+
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, hole.radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Accretion disk
+                    ctx.strokeStyle = '#ff0044';
+                    ctx.lineWidth = 3;
+                    ctx.shadowBlur = 30;
+                    ctx.shadowColor = '#ff0044';
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, hole.radius + 10, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+
+                    // Warning label
+                    ctx.fillStyle = '#ff0044';
+                    ctx.font = 'bold 14px Rajdhani';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('BLACK HOLE', screenX, screenY + hole.radius + 25);
+                }
+            });
+
+            // Draw POWER-UPS - Speed Boosts!
+            powerUps.forEach(powerup => {
+                const screenX = (powerup.x - cameraX) + canvas.width / 2;
+                const screenY = (powerup.y - cameraY) + canvas.height / 2;
+
+                if (screenX > -100 && screenX < canvas.width + 100 &&
+                    screenY > -100 && screenY < canvas.height + 100) {
+
+                    const pulse = Math.sin(Date.now() / 200) * 0.3 + 1;
+
+                    // Glow
+                    const gradient = ctx.createRadialGradient(screenX, screenY, 0, screenX, screenY, powerup.radius * pulse);
+                    gradient.addColorStop(0, '#FFD700');
+                    gradient.addColorStop(0.5, '#FFA500');
+                    gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, powerup.radius * pulse, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Core
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, powerup.radius * 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Speed icon
+                    ctx.fillStyle = '#FFD700';
+                    ctx.font = 'bold 20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('⚡', screenX, screenY + 7);
+                }
+            });
+
             // Draw player
             const playerScreenX = canvas.width / 2;
             const playerScreenY = canvas.height / 2;
@@ -1517,12 +1590,86 @@
         }
 
         // Game loop
+        // Update black holes
+        function updateBlackHoles() {
+            blackHoles.forEach((hole, index) => {
+                // Pull player toward black hole
+                const dx = hole.x - player.x;
+                const dy = hole.y - player.y;
+                const dist = Math.hypot(dx, dy);
+
+                // Gravitational pull
+                if (dist < 800) {
+                    const pullForce = hole.pullStrength / (dist * dist) * 10000;
+                    player.vx += (dx / dist) * pullForce;
+                    player.vy += (dy / dist) * pullForce;
+                }
+
+                // Check if player touched black hole - RESET TO SMALL!
+                if (dist < hole.radius + player.radius) {
+                    player.mass = 100; // Reset to starting mass
+                    player.radius = 15; // Reset to starting size
+                    createParticles(player.x, player.y, '#ff0044', 50);
+                    document.getElementById('mass').textContent = 100;
+                }
+
+                // Remove black holes far from player
+                if (dist > 3000) {
+                    blackHoles.splice(index, 1);
+                }
+            });
+        }
+
+        // Update power-ups
+        function updatePowerUps() {
+            powerUps.forEach((powerup, index) => {
+                const dx = powerup.x - player.x;
+                const dy = powerup.y - player.y;
+                const dist = Math.hypot(dx, dy);
+
+                // Magnetic pull toward player
+                if (dist < 300) {
+                    powerup.x += (player.x - powerup.x) * 0.05;
+                    powerup.y += (player.y - powerup.y) * 0.05;
+                }
+
+                // Collect power-up
+                if (dist < powerup.radius + player.radius) {
+                    if (powerup.type === 'speedBoost') {
+                        speedBoostActive = true;
+                        speedBoostTimer = 300; // 5 seconds at 60fps
+                        createParticles(powerup.x, powerup.y, '#FFD700', 30);
+                    }
+                    powerUps.splice(index, 1);
+                }
+
+                // Remove if too far
+                if (dist > 2000) {
+                    powerUps.splice(index, 1);
+                }
+            });
+
+            // Update speed boost timer
+            if (speedBoostActive) {
+                speedBoostTimer--;
+                if (speedBoostTimer <= 0) {
+                    speedBoostActive = false;
+                }
+            }
+        }
+
         function gameLoop() {
             if (!gameActive) return;
 
             updatePlayer();
             updateObjects();
             updateParticles();
+            updateBlackHoles();
+            updatePowerUps();
+
+            // Spawn power-ups randomly
+            spawnSpeedBoost();
+
             draw();
 
             requestAnimationFrame(gameLoop);
@@ -1546,11 +1693,27 @@
 
             generateStars(400);
 
+            // Reset level
+            currentLevel = 1;
+            document.getElementById('levelDisplay').textContent = currentLevel;
+
             // Spawn initial mix of planets (LOTS of smaller ones to eat!)
             for (let i = 0; i < 35; i++) { // Even more initial planets!
                 const isLarge = Math.random() > 0.9; // 90% are smaller - way more food!
                 const size = isLarge ? 10 + Math.random() * 12 : 3 + Math.random() * 7; // Smaller max size
                 spawnCelestialObject(null, null, size);
+            }
+
+            // Spawn initial black holes
+            for (let i = 0; i < 2; i++) {
+                spawnBlackHole();
+            }
+
+            // Clear power-ups
+            powerUps.length = 0;
+            blackHoles.length = 0;
+            for (let i = 0; i < 2; i++) {
+                spawnBlackHole();
             }
 
             gameLoop();
