@@ -124,6 +124,12 @@
             50% { transform: scale(1.05); }
         }
 
+        @keyframes levelPulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+        }
+
         .subtitle {
             font-size: 18px;
             color: #888;
@@ -598,6 +604,9 @@
         let cameraX = 0;
         let cameraY = 0;
         let dangerLevel = 0;
+        let currentLevel = 1;
+        let speedBoostActive = false;
+        let speedBoostTimer = 0;
 
         // Leaderboard system
         function loadRecords() {
@@ -773,6 +782,64 @@
         const celestialObjects = [];
         const particles = [];
         const stars = [];
+        const blackHoles = [];
+        const powerUps = [];
+
+        // Level system - 1000 levels!
+        function getMassForLevel(level) {
+            // Exponential growth: level 1=100, level 10=1000, level 100=100000, level 1000=10000000
+            return Math.floor(100 * Math.pow(1.05, level - 1));
+        }
+
+        function checkLevelUp() {
+            const requiredMass = getMassForLevel(currentLevel + 1);
+            if (player.mass >= requiredMass && currentLevel < 1000) {
+                currentLevel++;
+                document.getElementById('levelDisplay').textContent = currentLevel;
+
+                // Level up visual effect
+                showLevelUp();
+
+                // Spawn more enemies as levels increase
+                if (currentLevel % 10 === 0) {
+                    spawnBlackHole();
+                }
+            }
+        }
+
+        function showLevelUp() {
+            const levelMsg = document.createElement('div');
+            levelMsg.textContent = `LEVEL ${currentLevel}!`;
+            levelMsg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Orbitron;font-size:64px;color:#00ff88;text-shadow:0 0 30px #00ff88;z-index:200;pointer-events:none;animation:levelPulse 1s ease-out;';
+            document.body.appendChild(levelMsg);
+            setTimeout(() => levelMsg.remove(), 1000);
+        }
+
+        // Black Hole spawning
+        function spawnBlackHole() {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 1000 + Math.random() * 500;
+            blackHoles.push({
+                x: player.x + Math.cos(angle) * distance,
+                y: player.y + Math.sin(angle) * distance,
+                radius: 40 + Math.random() * 30,
+                pullStrength: 8
+            });
+        }
+
+        // Speed Boost spawning
+        function spawnSpeedBoost() {
+            if (Math.random() < 0.02 && powerUps.length < 3) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 600 + Math.random() * 400;
+                powerUps.push({
+                    x: player.x + Math.cos(angle) * distance,
+                    y: player.y + Math.sin(angle) * distance,
+                    radius: 20,
+                    type: 'speedBoost'
+                });
+            }
+        }
 
         // Generate stars with Milky Way galaxy band
         function generateStars(count) {
@@ -1128,7 +1195,7 @@
                         // Player absorbs object - EXACT mass transfer
                         score += Math.floor(obj.mass * 10);
                         player.mass += obj.mass; // 100% mass transfer
-                        player.radius = Math.sqrt(player.mass) * 1.5;
+                        player.radius = Math.min(Math.sqrt(player.mass) * 1.5, 150); // MAX SIZE CAP!
                         absorbedCount++;
                         createParticles(obj.x, obj.y, obj.color, 40);
                         celestialObjects.splice(index, 1);
@@ -1136,6 +1203,8 @@
                         document.getElementById('mass').textContent = Math.floor(player.mass);
                         document.getElementById('score').textContent = score;
                         document.getElementById('absorbed').textContent = absorbedCount;
+
+                        checkLevelUp(); // Check for level up!
                         return;
                     } else {
                         // Player gets eaten
