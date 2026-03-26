@@ -314,22 +314,22 @@
             transform: translateX(-50%);
             width: 150px;
             height: 150px;
-            border: 3px solid rgba(0, 255, 136, 0.3);
+            border: none;
             border-radius: 50%;
-            background: rgba(0, 255, 136, 0.1);
+            background: transparent;
         }
 
         #joystickKnob {
             position: absolute;
             width: 60px;
             height: 60px;
-            background: radial-gradient(circle, #00ff88, #00ccff);
+            background: transparent;
             border-radius: 50%;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
             transition: all 0.1s ease;
+            display: none;
         }
 
         .control-mode {
@@ -716,23 +716,7 @@
             joystickKnob.style.transform = 'translate(-50%, -50%)';
         }
 
-        // GYROSCOPE CONTROLS (tilt phone)
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            // iOS 13+ requires permission
-            canvas.addEventListener('click', () => {
-                if (!gameActive) return;
-                DeviceOrientationEvent.requestPermission()
-                    .then(response => {
-                        if (response === 'granted') {
-                            enableGyro();
-                        }
-                    });
-            });
-        } else if (window.DeviceOrientationEvent) {
-            // Android and older iOS
-            enableGyro();
-        }
-
+        // GYROSCOPE CONTROLS (tilt phone) - MUCH LESS SENSITIVE
         function enableGyro() {
             useGyro = true;
             document.getElementById('controlMode').classList.add('show');
@@ -745,13 +729,35 @@
 
                 // beta: front-to-back tilt (-180 to 180)
                 // gamma: left-to-right tilt (-90 to 90)
-                const tiltLR = e.gamma; // left/right
-                const tiltFB = e.beta;  // front/back
+                const tiltLR = e.gamma || 0; // left/right
+                const tiltFB = e.beta || 0;  // front/back
 
-                // Normalize to -1 to 1
-                gyroX = Math.max(-1, Math.min(1, tiltLR / 30));
-                gyroY = Math.max(-1, Math.min(1, (tiltFB - 45) / 30)); // Adjust for holding angle
+                // MUCH less sensitive - divide by 90 instead of 30
+                gyroX = Math.max(-1, Math.min(1, tiltLR / 90));
+                // Fix downward movement - don't subtract 45
+                gyroY = Math.max(-1, Math.min(1, tiltFB / 90));
             });
+        }
+
+        // Auto-enable gyro on mobile
+        if (isMobile) {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS 13+ - will ask on first touch
+                document.addEventListener('touchstart', () => {
+                    if (!useGyro) {
+                        DeviceOrientationEvent.requestPermission()
+                            .then(response => {
+                                if (response === 'granted') {
+                                    enableGyro();
+                                }
+                            })
+                            .catch(console.error);
+                    }
+                }, { once: true });
+            } else if (window.DeviceOrientationEvent) {
+                // Android - enable immediately
+                enableGyro();
+            }
         }
 
         // Color selection
@@ -975,16 +981,16 @@
             const char = characters[selectedCharacter];
             const speedBoost = char.speed;
 
-            // JOYSTICK CONTROLS (bottom of screen)
+            // JOYSTICK CONTROLS (bottom of screen) - SLOWER
             if (touchActive && (joystickX !== 0 || joystickY !== 0)) {
-                player.vx += joystickX * player.acceleration * speedBoost * 1.5;
-                player.vy += joystickY * player.acceleration * speedBoost * 1.5;
+                player.vx += joystickX * player.acceleration * speedBoost * 0.8;
+                player.vy += joystickY * player.acceleration * speedBoost * 0.8;
             }
 
-            // GYROSCOPE CONTROLS (tilt phone)
+            // GYROSCOPE CONTROLS (tilt phone) - SLOWER
             if (useGyro && (gyroX !== 0 || gyroY !== 0)) {
-                player.vx += gyroX * player.acceleration * speedBoost * 1.2;
-                player.vy += gyroY * player.acceleration * speedBoost * 1.2;
+                player.vx += gyroX * player.acceleration * speedBoost * 0.5;
+                player.vy += gyroY * player.acceleration * speedBoost * 0.5;
             }
 
             // Keyboard controls with character speed
