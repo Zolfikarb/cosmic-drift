@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cosmic Drift - Gravitational Warfare</title>
+    <title>starfuckr</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;600;700&family=Orbitron:wght@700;900&display=swap');
 
@@ -322,7 +322,7 @@
     <div class="danger-warning hidden" id="dangerWarning">⚠ DANGER ⚠</div>
 
     <div id="startScreen">
-        <h1 class="title">COSMIC DRIFT</h1>
+        <h1 class="title">STARFUCKR</h1>
         <p class="subtitle">Escape the Consuming Star</p>
 
         <div style="max-width: 600px; margin: 0 auto 15px; text-align: center; font-size: 14px; color: #aaa;">
@@ -586,6 +586,38 @@
         window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
+        // MOBILE TOUCH CONTROLS - Touch and drag to move!
+        let touchActive = false;
+        let touchX = 0;
+        let touchY = 0;
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchActive = true;
+            const touch = e.touches[0];
+            touchX = touch.clientX;
+            touchY = touch.clientY;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (touchActive) {
+                const touch = e.touches[0];
+                touchX = touch.clientX;
+                touchY = touch.clientY;
+            }
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchActive = false;
+        });
+
+        canvas.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            touchActive = false;
+        });
+
         // Color selection
         function selectColor(color, element) {
             selectedColor = color;
@@ -806,6 +838,20 @@
         function updatePlayer() {
             const char = characters[selectedCharacter];
             const speedBoost = char.speed;
+
+            // TOUCH CONTROLS - Move toward touch point
+            if (touchActive) {
+                const targetX = touchX - canvas.width / 2 + cameraX;
+                const targetY = touchY - canvas.height / 2 + cameraY;
+                const dx = targetX - player.x;
+                const dy = targetY - player.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > 10) {
+                    player.vx += (dx / distance) * player.acceleration * speedBoost * 1.5;
+                    player.vy += (dy / distance) * player.acceleration * speedBoost * 1.5;
+                }
+            }
 
             // Keyboard controls with character speed
             if (keys['w'] || keys['arrowup']) player.vy -= player.acceleration * speedBoost;
